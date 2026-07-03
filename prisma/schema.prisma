@@ -1,0 +1,98 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  clerkId   String   @unique
+  email     String   @unique
+  name      String
+  imageUrl  String?
+  phone     String?
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  postedJobs     Job[]      @relation("PostedJobs")
+  bids           Bid[]
+  reviewsGiven   Review[]   @relation("Reviewer")
+  reviewsReceived Review[]  @relation("Target")
+}
+
+model Category {
+  id          String @id @default(cuid())
+  name        String @unique
+  slug        String @unique
+  description String
+  icon        String
+
+  jobs Job[]
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  budgetMin   Float
+  budgetMax   Float
+  location    String?
+  isRemote    Boolean  @default(false)
+  urgent      Boolean  @default(false)
+  status      String   @default("open") // open, in_progress, completed, cancelled
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deadline    DateTime?
+
+  posterId   String
+  poster     User     @relation("PostedJobs", fields: [posterId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  bids    Bid[]
+  reviews Review[]
+
+  @@index([status])
+  @@index([posterId])
+  @@index([categoryId])
+}
+
+model Bid {
+  id          String   @id @default(cuid())
+  amount      Float
+  description String
+  timeline    String
+  status      String   @default("pending") // pending, accepted, rejected
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id])
+  bidderId String
+  bidder   User   @relation(fields: [bidderId], references: [id])
+
+  @@unique([jobId, bidderId])
+  @@index([bidderId])
+  @@index([status])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  rating    Int      // 1-5
+  comment   String?
+  createdAt DateTime @default(now())
+
+  jobId      String
+  job        Job    @relation(fields: [jobId], references: [id])
+  reviewerId String
+  reviewer   User   @relation("Reviewer", fields: [reviewerId], references: [id])
+  targetId   String
+  target     User   @relation("Target", fields: [targetId], references: [id])
+
+  @@unique([jobId, reviewerId])
+  @@index([targetId])
+}

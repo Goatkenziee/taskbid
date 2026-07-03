@@ -1,0 +1,60 @@
+{
+  "updatedAt": "2026-07-03T01:06:50.459Z",
+  "framework": "Next.js",
+  "dbModels": [
+    "User",
+    "Category",
+    "Job",
+    "Bid",
+    "Review"
+  ],
+  "apiRoutes": [
+    "app/api/accept-bid/route.ts",
+    "app/api/complete-job/route.ts",
+    "app/api/create-job/route.ts",
+    "app/api/place-bid/route.ts",
+    "app/api/webhooks/clerk/route.ts"
+  ],
+  "pages": [
+    "app/dashboard/page.tsx",
+    "app/jobs/[id]/page.tsx",
+    "app/jobs/page.tsx",
+    "app/page.tsx",
+    "app/post/page.tsx",
+    "app/sign-in/[[...sign-in]]/page.tsx",
+    "app/sign-up/[[...sign-up]]/page.tsx"
+  ],
+  "components": [
+    "app/layout.tsx",
+    "components/bid-form.tsx",
+    "components/navbar.tsx",
+    "components/post-task-form.tsx",
+    "components/ui/button.tsx",
+    "components/ui/card.tsx"
+  ],
+  "dependencies": [
+    "@clerk/nextjs",
+    "@clerk/themes",
+    "@prisma/client",
+    "@types/node",
+    "@types/react",
+    "@types/react-dom",
+    "autoprefixer",
+    "clsx",
+    "date-fns",
+    "lucide-react",
+    "next",
+    "postcss",
+    "prisma",
+    "react",
+    "react-dom",
+    "sonner",
+    "svix",
+    "tailwind-merge",
+    "tailwindcss",
+    "tsx",
+    "typescript",
+    "zod"
+  ],
+  "fileCount": 35
+}
