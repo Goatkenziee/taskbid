@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/navbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SaveButton } from "@/components/save-button";
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { MapPin, Clock, DollarSign, Users, Search, Zap } from "lucide-react";
@@ -23,7 +24,7 @@ function timeAgo(date: Date) {
 export default async function JobsPage({
   searchParams,
 }: {
-  searchParams: { category?: string; search?: string; remote?: string; urgent?: string };
+  searchParams: { category?: string; search?: string; remote?: string; urgent?: string; location?: string };
 }) {
   const categories = await prisma.category.findMany({ orderBy: { name: "asc" } });
 
@@ -33,12 +34,15 @@ export default async function JobsPage({
   }
   if (searchParams.search) {
     where.OR = [
-      { title: { contains: searchParams.search } },
-      { description: { contains: searchParams.search } },
+      { title: { contains: searchParams.search, mode: "insensitive" } },
+      { description: { contains: searchParams.search, mode: "insensitive" } },
     ];
   }
   if (searchParams.remote === "true") where.isRemote = true;
   if (searchParams.urgent === "true") where.urgent = true;
+  if (searchParams.location) {
+    where.location = { contains: searchParams.location, mode: "insensitive" };
+  }
 
   const jobs = await prisma.job.findMany({
     where,
@@ -99,19 +103,62 @@ export default async function JobsPage({
               <div className="space-y-2">
                 <Link
                   href={searchParams.urgent === "true" ? "/jobs" : "/jobs?urgent=true"}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition hover:bg-muted"
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition hover:bg-muted ${
+                    searchParams.urgent === "true" ? "bg-muted font-medium text-primary" : ""
+                  }`}
                 >
                   <Zap className="h-4 w-4 text-amber-400" />
                   Urgent Only
                 </Link>
                 <Link
                   href={searchParams.remote === "true" ? "/jobs" : "/jobs?remote=true"}
-                  className="flex items-center gap-2 rounded-md px-3 py-2 text-sm transition hover:bg-muted"
+                  className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition hover:bg-muted ${
+                    searchParams.remote === "true" ? "bg-muted font-medium text-primary" : ""
+                  }`}
                 >
                   <MapPin className="h-4 w-4 text-emerald-400" />
                   Remote Only
                 </Link>
               </div>
+            </Card>
+
+            {/* Location filter */}
+            <Card className="p-5">
+              <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Location
+              </h3>
+              <form method="GET" action="/jobs" className="space-y-2">
+                {/* Preserve existing search params */}
+                {searchParams.category && (
+                  <input type="hidden" name="category" value={searchParams.category} />
+                )}
+                {searchParams.search && (
+                  <input type="hidden" name="search" value={searchParams.search} />
+                )}
+                {searchParams.remote && (
+                  <input type="hidden" name="remote" value={searchParams.remote} />
+                )}
+                {searchParams.urgent && (
+                  <input type="hidden" name="urgent" value={searchParams.urgent} />
+                )}
+                <input
+                  name="location"
+                  defaultValue={searchParams.location || ""}
+                  placeholder="City, state, or zip..."
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-primary focus:outline-none"
+                />
+                <Button type="submit" variant="outline" className="w-full text-sm">
+                  Filter by Location
+                </Button>
+                {searchParams.location && (
+                  <Link
+                    href="/jobs"
+                    className="block text-center text-xs text-muted-foreground underline underline-offset-2 hover:text-primary"
+                  >
+                    Clear location filter
+                  </Link>
+                )}
+              </form>
             </Card>
           </aside>
 
@@ -145,55 +192,57 @@ export default async function JobsPage({
             ) : (
               <div className="space-y-4">
                 {jobs.map((job) => (
-                  <Link key={job.id} href={`/jobs/${job.id}`}>
-                    <Card className="group flex flex-col gap-3 p-5 transition hover:border-primary/50 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          {job.urgent && (
-                            <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
-                              Urgent
-                            </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">{job.category.name}</span>
-                        </div>
-                        <h3 className="mt-1 text-lg font-semibold group-hover:text-primary">
-                          {job.title}
-                        </h3>
-                        <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">
-                          {job.description}
-                        </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <DollarSign className="h-3.5 w-3.5" />
-                            {formatBudget(job.budgetMin, job.budgetMax)}
+                  <Card
+                    key={job.id}
+                    className="group relative flex flex-col gap-3 p-5 transition hover:border-primary/50 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <Link href={`/jobs/${job.id}`} className="absolute inset-0 z-0" />
+                    <div className="relative z-10 flex-1">
+                      <div className="flex items-center gap-2">
+                        {job.urgent && (
+                          <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                            URGENT
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3.5 w-3.5" />
-                            {job._count.bids} bids
+                        )}
+                        {job.isRemote && (
+                          <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            REMOTE
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            {timeAgo(job.createdAt)}
-                          </span>
-                          {!job.isRemote && job.location && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="h-3.5 w-3.5" />
-                              {job.location}
-                            </span>
-                          )}
-                          {job.isRemote && (
-                            <span className="text-emerald-400">Remote</span>
-                          )}
-                        </div>
+                        )}
                       </div>
-                      <div className="shrink-0 text-left sm:text-right">
-                        <div className="text-sm font-semibold gradient-text">
+                      <h2 className="mt-1 text-lg font-semibold group-hover:text-primary">
+                        {job.title}
+                      </h2>
+                      <p className="mt-0.5 line-clamp-1 text-sm text-muted-foreground">
+                        {job.description}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        {job.location && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {job.location}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          {timeAgo(job.createdAt)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          {job._count.bids} bid{job._count.bids !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="relative z-10 flex flex-shrink-0 items-center gap-3">
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-primary">
                           {formatBudget(job.budgetMin, job.budgetMax)}
                         </div>
                         <div className="text-xs text-muted-foreground">est. budget</div>
                       </div>
-                    </Card>
-                  </Link>
+                      <SaveButton jobId={job.id} />
+                    </div>
+                  </Card>
                 ))}
               </div>
             )}

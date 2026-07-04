@@ -1,34 +1,50 @@
 {
-  "updatedAt": "2026-07-03T01:09:43.381Z",
+  "updatedAt": "2026-07-04T14:30:49.710Z",
   "framework": "Next.js",
   "dbModels": [
     "User",
     "Category",
     "Job",
     "Bid",
-    "Review"
+    "Message",
+    "Review",
+    "Notification",
+    "SavedJob"
   ],
   "apiRoutes": [
     "app/api/accept-bid/route.ts",
     "app/api/complete-job/route.ts",
     "app/api/create-job/route.ts",
+    "app/api/messages/route.ts",
+    "app/api/notifications/route.ts",
     "app/api/place-bid/route.ts",
+    "app/api/reviews/route.ts",
+    "app/api/saved-jobs/route.ts",
+    "app/api/users/[id]/route.ts",
     "app/api/webhooks/clerk/route.ts"
   ],
   "pages": [
     "app/dashboard/page.tsx",
     "app/jobs/[id]/page.tsx",
     "app/jobs/page.tsx",
+    "app/messages/[id]/page.tsx",
+    "app/messages/page.tsx",
     "app/page.tsx",
     "app/post/page.tsx",
+    "app/profile/[id]/page.tsx",
     "app/sign-in/[[...sign-in]]/page.tsx",
     "app/sign-up/[[...sign-up]]/page.tsx"
   ],
   "components": [
     "app/layout.tsx",
     "components/bid-form.tsx",
+    "components/chat-box.tsx",
     "components/navbar.tsx",
+    "components/notifications-dropdown.tsx",
     "components/post-task-form.tsx",
+    "components/review-form.tsx",
+    "components/reviews-list.tsx",
+    "components/save-button.tsx",
     "components/ui/button.tsx",
     "components/ui/card.tsx"
   ],
@@ -56,5 +72,5 @@
     "typescript",
     "zod"
   ],
-  "fileCount": 35
+  "fileCount": 49
 }

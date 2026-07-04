@@ -1,60 +1,95 @@
 import { prisma } from "@/lib/db";
-import { notFound } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
 import { Navbar } from "@/components/navbar";
+import { BidForm } from "@/components/bid-form";
+import { ReviewForm } from "@/components/review-form";
+import { ReviewsList } from "@/components/reviews-list";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { BidForm } from "@/components/bid-form";
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
-import { MapPin, Clock, DollarSign, Users, Calendar, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import {
+  ArrowLeft,
+  DollarSign,
+  Users,
+  Clock,
+  Calendar,
+  MapPin,
+  CheckCircle,
+  XCircle,
+  MessageCircle,
+} from "lucide-react";
 
 function timeAgo(date: Date) {
-  const sec = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (sec < 60) return "Just now";
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  return `${day}d ago`;
+  const now = new Date();
+  const diff = now.getTime() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
-export default async function JobDetailPage({ params }: { params: { id: string } }) {
+export default async function JobDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
+  const { userId } = await auth();
+
   const job = await prisma.job.findUnique({
     where: { id: params.id },
     include: {
-      poster: { select: { id: true, name: true, imageUrl: true, createdAt: true } },
       category: true,
+      poster: { select: { id: true, name: true, imageUrl: true } },
       bids: {
+        orderBy: { amount: "asc" },
         include: {
           bidder: { select: { id: true, name: true, imageUrl: true } },
         },
-        orderBy: { amount: "asc" },
       },
       _count: { select: { bids: true } },
     },
   });
 
-  if (!job) notFound();
-
-  const { userId } = await auth();
-  let currentUser: { id: string; clerkId: string } | null = null;
-  if (userId) {
-    currentUser = await prisma.user.findUnique({
-      where: { clerkId: userId },
-      select: { id: true, clerkId: true },
-    });
+  if (!job) {
+    return (
+      <>
+        <Navbar />
+        <main className="mx-auto max-w-5xl px-4 py-20 text-center sm:px-6">
+          <h1 className="text-2xl font-bold">Job not found</h1>
+          <Link
+            href="/jobs"
+            className="mt-4 inline-flex items-center gap-1 text-sm text-primary hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Jobs
+          </Link>
+        </main>
+      </>
+    );
   }
+
+  // Get current user from DB
+  const currentUser = userId
+    ? await prisma.user.findUnique({ where: { clerkId: userId } })
+    : null;
 
   const isPoster = currentUser?.id === job.posterId;
   const acceptedBid = job.bids.find((b) => b.status === "accepted");
   const userBid = job.bids.find((b) => b.bidderId === currentUser?.id);
 
+  // Determine if current user is the accepted bidder
+  const isAcceptedBidder =
+    currentUser && acceptedBid?.bidderId === currentUser.id;
+
   return (
     <>
       <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">
-        <Link href="/jobs" className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/jobs"
+          className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" /> Back to Jobs
         </Link>
 
@@ -80,7 +115,11 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                       : "bg-muted text-muted-foreground"
                   }`}
                 >
-                  {job.status === "open" ? "Open for Bids" : job.status === "in_progress" ? "In Progress" : "Completed"}
+                  {job.status === "open"
+                    ? "Open for Bids"
+                    : job.status === "in_progress"
+                    ? "In Progress"
+                    : "Completed"}
                 </span>
               </div>
 
@@ -113,7 +152,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                     {job.location}
                   </span>
                 )}
-                {job.isRemote && <span className="text-emerald-400">🌍 Remote</span>}
+                {job.isRemote && (
+                  <span className="text-emerald-400">🌍 Remote</span>
+                )}
               </div>
 
               <div className="mt-6 border-t border-border pt-6">
@@ -130,10 +171,59 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                 </div>
                 <div>
                   <div className="text-sm font-medium">{job.poster.name}</div>
-                  <div className="text-xs text-muted-foreground">Task Poster</div>
+                  <div className="text-xs text-muted-foreground">
+                    Task Poster
+                  </div>
                 </div>
               </div>
             </Card>
+
+            {/* Chat + Review sections for in_progress / completed */}
+            {(job.status === "in_progress" || job.status === "completed") &&
+              currentUser &&
+              (isPoster || isAcceptedBidder) && (
+                <div className="mt-8 space-y-6">
+                  {/* Chat section */}
+                  <Card className="p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <MessageCircle className="h-5 w-5 text-primary" />
+                        <h2 className="text-lg font-bold">Chat</h2>
+                      </div>
+                      <Link href={`/messages/${job.id}`}>
+                        <Button size="sm">
+                          Open Chat
+                        </Button>
+                      </Link>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Communicate with{" "}
+                      {isPoster
+                        ? acceptedBid?.bidder.name || "the pro"
+                        : job.poster.name}{" "}
+                      about this task.
+                    </p>
+                  </Card>
+
+                  {/* Review section — only for completed jobs */}
+                  {job.status === "completed" && (
+                    <div>
+                      <h2 className="mb-4 text-xl font-bold">Reviews</h2>
+                      <ReviewForm
+                        jobId={job.id}
+                        onSubmitted={() => {}}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+            {/* Reviews display for completed jobs */}
+            {job.status === "completed" && (
+              <div className="mt-8">
+                <ReviewsList jobId={job.id} />
+              </div>
+            )}
 
             {/* Bids section */}
             <div className="mt-8">
@@ -143,7 +233,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
               {job.bids.length === 0 ? (
                 <Card className="p-8 text-center">
-                  <p className="text-muted-foreground">No bids yet. Be the first!</p>
+                  <p className="text-muted-foreground">
+                    No bids yet. Be the first!
+                  </p>
                 </Card>
               ) : (
                 <div className="space-y-4">
@@ -164,14 +256,18 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                             {bid.bidder.name.charAt(0).toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-medium">{bid.bidder.name}</div>
+                            <div className="font-medium">
+                              {bid.bidder.name}
+                            </div>
                             <div className="text-xs text-muted-foreground">
                               Timeline: {bid.timeline}
                             </div>
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-lg font-bold gradient-text">${bid.amount}</div>
+                          <div className="text-lg font-bold gradient-text">
+                            ${bid.amount}
+                          </div>
                           {bid.status === "accepted" && (
                             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-400">
                               <CheckCircle className="h-3 w-3" /> Accepted
@@ -184,18 +280,38 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                           )}
                         </div>
                       </div>
-                      <p className="mt-3 text-sm text-muted-foreground">{bid.description}</p>
+                      <p className="mt-3 text-sm text-muted-foreground">
+                        {bid.description}
+                      </p>
 
                       {/* Accept button — only poster sees this */}
-                      {isPoster && bid.status === "pending" && job.status === "open" && (
-                        <form action={`/api/accept-bid`} method="POST" className="mt-4">
-                          <input type="hidden" name="bidId" value={bid.id} />
-                          <input type="hidden" name="jobId" value={job.id} />
-                          <Button size="sm" variant="outline" className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10">
-                            Accept This Bid
-                          </Button>
-                        </form>
-                      )}
+                      {isPoster &&
+                        bid.status === "pending" &&
+                        job.status === "open" && (
+                          <form
+                            action={`/api/accept-bid`}
+                            method="POST"
+                            className="mt-4"
+                          >
+                            <input
+                              type="hidden"
+                              name="bidId"
+                              value={bid.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="jobId"
+                              value={job.id}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10"
+                            >
+                              Accept This Bid
+                            </Button>
+                          </form>
+                        )}
                     </Card>
                   ))}
                 </div>
@@ -207,11 +323,18 @@ export default async function JobDetailPage({ params }: { params: { id: string }
           <div className="lg:col-span-1">
             <div className="sticky top-24">
               {job.status === "open" && !isPoster && currentUser && !acceptedBid && (
-                <BidForm jobId={job.id} existingBid={userBid ? {
-                  amount: userBid.amount,
-                  description: userBid.description,
-                  timeline: userBid.timeline,
-                } : undefined} />
+                <BidForm
+                  jobId={job.id}
+                  existingBid={
+                    userBid
+                      ? {
+                          amount: userBid.amount,
+                          description: userBid.description,
+                          timeline: userBid.timeline,
+                        }
+                      : undefined
+                  }
+                />
               )}
 
               {job.status === "in_progress" && acceptedBid && (
@@ -221,14 +344,35 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <p className="mt-1 text-xs text-muted-foreground">
                     A bid has been accepted for this task.
                   </p>
-                  {isPoster && (
-                    <form action={`/api/complete-job`} method="POST" className="mt-4">
-                      <input type="hidden" name="jobId" value={job.id} />
-                      <Button size="sm" className="w-full">
-                        Mark as Completed
-                      </Button>
-                    </form>
-                  )}
+                  <div className="mt-4 space-y-2">
+                    {isPoster && (
+                      <form
+                        action={`/api/complete-job`}
+                        method="POST"
+                      >
+                        <input
+                          type="hidden"
+                          name="jobId"
+                          value={job.id}
+                        />
+                        <Button size="sm" className="w-full">
+                          Mark as Completed
+                        </Button>
+                      </form>
+                    )}
+                    {(isPoster || isAcceptedBidder) && (
+                      <Link href={`/messages/${job.id}`}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                        >
+                          <MessageCircle className="mr-1.5 h-4 w-4" />
+                          Chat
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
                 </Card>
               )}
 
@@ -239,12 +383,26 @@ export default async function JobDetailPage({ params }: { params: { id: string }
                   <p className="mt-1 text-xs text-muted-foreground">
                     This task has been marked as done.
                   </p>
+                  {(isPoster || isAcceptedBidder) && (
+                    <Link href={`/messages/${job.id}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-4 w-full"
+                      >
+                        <MessageCircle className="mr-1.5 h-4 w-4" />
+                        View Chat
+                      </Button>
+                    </Link>
+                  )}
                 </Card>
               )}
 
               {!currentUser && (
                 <Card className="p-5 text-center">
-                  <p className="text-sm text-muted-foreground">Sign in to place a bid on this task.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Sign in to place a bid on this task.
+                  </p>
                   <Link href="/sign-in">
                     <Button className="mt-3 w-full">Sign In</Button>
                   </Link>
@@ -253,7 +411,9 @@ export default async function JobDetailPage({ params }: { params: { id: string }
 
               {isPoster && (
                 <Card className="p-5">
-                  <p className="text-sm font-medium">You posted this task</p>
+                  <p className="text-sm font-medium">
+                    You posted this task
+                  </p>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Review bids below and accept the best one.
                   </p>

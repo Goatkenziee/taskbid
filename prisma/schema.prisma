@@ -15,13 +15,18 @@ model User {
   imageUrl  String?
   phone     String?
   bio       String?
+  location  String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  postedJobs     Job[]      @relation("PostedJobs")
-  bids           Bid[]
-  reviewsGiven   Review[]   @relation("Reviewer")
-  reviewsReceived Review[]  @relation("Target")
+  postedJobs       Job[]      @relation("PostedJobs")
+  bids             Bid[]
+  reviewsGiven     Review[]   @relation("Reviewer")
+  reviewsReceived  Review[]   @relation("Target")
+  sentMessages     Message[]  @relation("Sender")
+  receivedMessages Message[]  @relation("Receiver")
+  notifications    Notification[]
+  savedJobs        SavedJob[]
 }
 
 model Category {
@@ -53,8 +58,10 @@ model Job {
   categoryId String
   category   Category @relation(fields: [categoryId], references: [id])
 
-  bids    Bid[]
-  reviews Review[]
+  bids     Bid[]
+  reviews  Review[]
+  messages Message[]
+  savedBy  SavedJob[]
 
   @@index([status])
   @@index([posterId])
@@ -80,6 +87,25 @@ model Bid {
   @@index([status])
 }
 
+model Message {
+  id        String   @id @default(cuid())
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  jobId     String
+  job       Job    @relation(fields: [jobId], references: [id])
+  senderId  String
+  sender    User   @relation("Sender", fields: [senderId], references: [id])
+  receiverId String
+  receiver  User   @relation("Receiver", fields: [receiverId], references: [id])
+
+  @@index([jobId])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+}
+
 model Review {
   id        String   @id @default(cuid())
   rating    Int      // 1-5
@@ -95,4 +121,32 @@ model Review {
 
   @@unique([jobId, reviewerId])
   @@index([targetId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  type      String   // bid_placed, bid_accepted, job_completed, new_message, review_received
+  message   String
+  read      Boolean  @default(false)
+  link      String?  // URL to the relevant page
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model SavedJob {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User  @relation(fields: [userId], references: [id])
+  jobId  String
+  job    Job   @relation(fields: [jobId], references: [id])
+
+  @@unique([userId, jobId])
+  @@index([userId])
 }
